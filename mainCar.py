@@ -9,8 +9,23 @@ from PyQt5 import QtCore, QtWidgets, uic
 mydb = mysql.connector.connect(host = "localhost", user = "smoke", passwd = "hellomoto", database = "car", autocommit=True)
 mycursor = mydb.cursor()
 
-mycursor.execute("DROP TABLE parkingdb")
-mycursor.execute("CREATE TABLE parkingdb(slot int, carNumber VARCHAR(15), entry VARCHAR(40), exit1 VARCHAR(40), durationInSec int, cost int)")
+mycursor.execute("DROP TABLE slot")
+mycursor.execute("DROP TABLE duration")
+mycursor.execute("DROP TABLE entry")
+mycursor.execute("DROP TABLE exits")
+mycursor.execute("DROP TABLE cost")
+
+mycursor.execute("CREATE TABLE slot(carNumber VARCHAR(15), slot int)")
+mycursor.execute("CREATE TABLE entry(carNumber VARCHAR(15), entry VARCHAR(40))")
+mycursor.execute("CREATE TABLE exits(carNumber VARCHAR(15), exit1 VARCHAR(40))")
+mycursor.execute("CREATE TABLE duration(carNumber VARCHAR(15), durationInSec int)")
+mycursor.execute("CREATE TABLE cost(carNumber VARCHAR(15), cost int)")
+
+
+mycursor.execute(" drop trigger if exists mytrigger")
+
+qrystr = "CREATE TRIGGER MyTrigger ON dbo.MyTable AFTER INSERT AS if exists ( select * from table t  inner join inserted i on i.name=t.name and i.date=t.date and i.id <> t.id) begin rollback RAISERROR ('Duplicate Data', 16, 1); end go"
+#mycursor.execute(qrystr)
 
 slots =  [False for i in range(16)]
 
@@ -18,21 +33,44 @@ class Ui(QtWidgets.QMainWindow):
     def __init__(self):
         super(Ui, self).__init__()
         uic.loadUi("front.ui", self)
-        self.ENTRYBUTTON.released.connect(lambda: entry())
+        self.ENTRYBUTTON.released.connect(lambda: xd())
         self.EXITBUTTON.released.connect(lambda: exit())
         #self.Active.setStyleSheet("background-color: #FF0B00")#red
         #self.Active.setStyleSheet("background-color: #40FF50")#green
+        def xd():
+            carNumber = self.lineEdit.text()
+            mycursor.execute("SELECT carNumber FROM slot")
+            f = list(mycursor.fetchall())
+            if any(carNumber in s for s in f):
+                print("a")
+                self.label_2.setText("Duplicate")
+
+            #print(f)
+
+            else:
+                bla()
+        def bla():
+            carNumber = self.lineEdit.text()
+                #print(len(carNumber))
+           
+            if len(carNumber) == 0:
+                blank()
+                    #exit()
+            else:
+                entry()
 
 
         def entry():
+            
             try:
                 
                 carNumber = self.lineEdit.text()
                 #print(len(carNumber))
+                """
                 if len(carNumber) == 0:
                     blank()
                     exit()
-
+                """    
                 self.lineEdit.clear()         
                 #print(carNumber)
                 slotNO = int(slots.index(False))
@@ -45,7 +83,13 @@ class Ui(QtWidgets.QMainWindow):
                 print(type(entry))
                 
 
-                mycursor.execute("INSERT INTO parkingdb (slot, carNumber, entry) VALUES(%s, %s, %s)", (slotNO, carNumber, entry))
+                #mycursor.execute("INSERT INTO parkingdb (slot, carNumber, entry) VALUES(%s, %s, %s)", (slotNO, carNumber, entry))
+                mycursor.execute("Insert INTO slot (carNumber, slot) VALUES(%s,%s)", (carNumber, slotNO))
+                mycursor.execute("Insert INTO entry (carNumber, entry) VALUES(%s,%s)", (carNumber, entry))
+                mycursor.execute("Insert INTO exits (carNumber) VALUES(%s)", (carNumber,))
+                mycursor.execute("Insert INTO duration (carNumber) VALUES(%s)", (carNumber,))
+                mycursor.execute("Insert INTO cost (carNumber) VALUES(%s)", (carNumber,))
+                
 
                 self.label_2.setText("Slot: {:,}".format(int(slotNO)))
 
@@ -101,27 +145,27 @@ class Ui(QtWidgets.QMainWindow):
                 
             except Exception as e:
                 print(e)
-                self.label_2.setText("Parking Full :/")
+                self.label_2.setText("Invalid")
 
         def blank():
             print("in")
-            self.label_2.setText("Empt")
-            time.sleep(5)
+            self.label_2.setText("Empty")
+            #time.sleep(5)
 
 
         def exit():
             try:
                 carNumber = self.lineEdit.text()
                 self.lineEdit.clear()         
-                print(carNumber)
+                #print(carNumber)
 
                 exit1 = datetime.datetime.now()
 
                 #slots[slotNO - 1] = False
 
-                mycursor.execute("update parkingdb set exit1 = %s WHERE carNumber = %s", (exit1, carNumber))
+                mycursor.execute("update exits set exit1 = %s WHERE carNumber = %s", (exit1, carNumber))
 
-                mycursor.execute("select slot from parkingdb where carNumber = %s", (carNumber,))
+                mycursor.execute("select slot from slot where carNumber = %s", (carNumber,))
                 slotNO = int(re.sub("[^0-9]", "", str(mycursor.fetchone())))
                 print(slotNO)
 
@@ -129,7 +173,7 @@ class Ui(QtWidgets.QMainWindow):
 
                 #------------------------TIME----------------------------
 
-                mycursor.execute("select entry from parkingdb where carNumber = %s", (carNumber,))
+                mycursor.execute("select entry from entry where carNumber = %s", (carNumber,))
                 #entry = str(mycursor.fetchone())
                 entry = re.sub('[,)(/\']', '', str(mycursor.fetchone()))
                 e = datetime.datetime.fromisoformat(entry)
@@ -143,8 +187,8 @@ class Ui(QtWidgets.QMainWindow):
                     cost = 150
                 self.label_2.setText("Cost: Rs." + str(cost))
 
-                mycursor.execute("update parkingdb set durationInSec = %s WHERE carNumber = %s", (time, carNumber))
-                mycursor.execute("update parkingdb set cost = %s WHERE carNumber = %s", (cost, carNumber))
+                mycursor.execute("update duration set durationInSec = %s WHERE carNumber = %s", (time, carNumber))
+                mycursor.execute("update cost set cost = %s WHERE carNumber = %s", (cost, carNumber))
 
                 if slots[0] == False:
                     self.s1.setStyleSheet("background-color: #40FF50")
